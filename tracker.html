@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Environmental Tracer Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --bg: #f4f8fb;
+  --card: #fff;
+  --text: #0b2545;
+  --accent: #1565c0;
+}
+body.dark {
+  --bg: #121212;
+  --card: #1e1e1e;
+  --text: #f4f4f4;
+  --accent: #90caf9;
+}
+body {
+  margin:0; font-family: Arial,sans-serif; background: var(--bg); color: var(--text); padding:20px;
+  transition: background 0.3s, color 0.3s;
+}
+h1 { text-align:center; margin:0; color:var(--accent); font-size:24px; }
+.topbar { text-align:center; margin-bottom:20px; }
+.time { font-size:14px; margin-top:5px; color:#666; }
+.search, .btn { padding:8px 12px; border-radius:8px; border:1px solid #ccc; margin:3px; }
+.btn { border:none; background: var(--accent); color:white; cursor:pointer; transition:0.3s; }
+.btn:hover { opacity:0.85; }
+.grid { display:flex; flex-wrap:wrap; gap:16px; justify-content:center; }
+.card { background: var(--card); padding:20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); flex:1 1 200px; max-width:250px; text-align:center; transition: background 0.3s, transform 0.2s; }
+.card:hover { transform: translateY(-4px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+.value { font-size:26px; font-weight:bold; margin-top:6px; }
+.charts { margin-top:25px; display:flex; flex-wrap:wrap; gap:16px; justify-content:center; }
+canvas { background:#fafafa; border-radius:12px; padding:10px; }
+#aqiBadge { padding:8px 16px; border-radius:20px; font-weight:bold; display:inline-block; margin-top:10px; }
+#aqiDesc { font-size:14px; margin-top:6px; }
+.tips { margin-top:20px; text-align:center; background:#e3f2fd; padding:14px; border-radius:10px; font-size:15px; }
+.history { margin-top:20px; background:#fff3e0; padding:14px; border-radius:10px; max-width:550px; margin-left:auto; margin-right:auto; font-size:14px; }
+footer { margin-top:30px; text-align:center; font-size:14px; color:#555; }
+
+/* Responsive */
+@media(max-width:600px){ .charts { flex-direction:column; align-items:center; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+<h1>Environmental Tracer Dashboard</h1>
+<input id="cityInput" class="search" placeholder="Enter city">
+<button class="btn" onclick="showDemo()">Check (Demo)</button>
+<button class="btn" onclick="toggleTheme()">🌙 Toggle Mode</button>
+<button class="btn" onclick="downloadCSV()">📥 Export CSV</button>
+<button class="btn" onclick="resetDashboard()">🔄 Reset</button>
+<button class="btn" onclick="downloadCharts()">🖼️ Download Charts</button>
+<div class="time" id="time"></div>
+</div>
+
+<div class="grid">
+<div class="card"><div> 🌡️ Temperature</div><div id="temp" class="value">-- °C</div></div>
+<div class="card"><div> 💧 Humidity</div><div id="humidity" class="value">-- %</div></div>
+<div class="card"><div> 💨 Wind Speed</div><div id="wind" class="value">-- m/s</div></div>
+<div class="card"><div> 🌍 Air Quality</div><div id="aqiBadge">--</div><div id="aqiDesc">--</div></div>
+</div>
+
+<div class="charts">
+<canvas id="tempChart" width="300" height="200"></canvas>
+<canvas id="humChart" width="300" height="200"></canvas>
+<canvas id="trendChart" width="400" height="200"></canvas>
+</div>
+
+<div class="tips"><strong> Eco Tip:</strong><div id="tip">--</div></div>
+
+<div class="history">
+<strong>Last 5 Records:</strong>
+<ul id="historyList"></ul>
+<p id="averageStats"></p>
+</div>
+
+<footer>Developed by DEEPTHI | Built with HTML, CSS, JavaScript & Chart.js</footer>
+
+<script>
+let tempChart, humChart, trendChart;
+let historyData = [];
+const tips = ["Use cloth bags instead of plastic.","Turn off lights when not needed.","Cycle or walk short distances.","Plant trees and save water.","Avoid burning waste; compost instead."];
+
+// Live clock
+setInterval(()=>{document.getElementById("time").textContent=new Date().toLocaleString();},1000);
+// Auto tip rotation
+setInterval(()=>{document.getElementById("tip").textContent=tips[Math.floor(Math.random()*tips.length)];},10000);
+
+function showDemo(){
+const city=document.getElementById("cityInput").value||"Sample City";
+const temp=Math.floor(Math.random()*15)+20;
+const hum=Math.floor(Math.random()*50)+30;
+const wind=(Math.random()*5).toFixed(1);
+const aqi=Math.floor(Math.random()*5)+1;
+document.getElementById("temp").textContent=temp+" °C";
+document.getElementById("humidity").textContent=hum+" %";
+document.getElementById("wind").textContent=wind+" m/s";
+styleAQI(aqi);
+document.getElementById("tip").textContent=tips[Math.floor(Math.random()*tips.length)];
+
+// Update history
+historyData.unshift({city,temp,hum,wind,aqi});
+if(historyData.length>5) historyData.pop();
+updateHistory();
+
+// Charts
+renderCharts(city,temp,hum);
+renderTrend();
+}
+
+function renderCharts(city,temp,hum){
+if(tempChart) tempChart.destroy();
+if(humChart) humChart.destroy();
+tempChart=new Chart(document.getElementById("tempChart"),{type:'bar',data:{labels:[city],datasets:[{label:'Temperature (°C)',data:[temp],backgroundColor:'#1565c0'}]}});
+humChart=new Chart(document.getElementById("humChart"),{type:'doughnut',data:{labels:['Humidity','Remaining'],datasets:[{data:[hum,100-hum],backgroundColor:['#4fc3f7','#e0e0e0']}]},options:{cutout:'70%'}});
+}
+
+function renderTrend(){
+if(trendChart) trendChart.destroy();
+const labels=historyData.map((h,i)=>`${h.city} ${i+1}`);
+const temps=historyData.map(h=>h.temp);
+const hums=historyData.map(h=>h.hum);
+trendChart=new Chart(document.getElementById("trendChart"),{type:'line',data:{labels,datasets:[{label:'Temp (°C)',data:temps,borderColor:'#1565c0',fill:false},{label:'Humidity (%)',data:hums,borderColor:'#4fc3f7',fill:false}]}});
+}
+
+function styleAQI(aqi){
+const badge=document.getElementById("aqiBadge");
+const desc=document.getElementById("aqiDesc");
+badge.textContent="AQI: "+aqi;
+if(aqi===1){badge.style.background="#a8e6cf";badge.style.color="#1b5e20";desc.textContent="Good - Air is fresh";}
+else if(aqi===2){badge.style.background="#dcedc1";badge.style.color="#33691e";desc.textContent="Fair - Acceptable";}
+else if(aqi===3){badge.style.background="#ffd54f";badge.style.color="#ff6f00";desc.textContent="Moderate - Sensitive groups take care";}
+else if(aqi===4){badge.style.background="#ff8a65";badge.style.color="#bf360c";desc.textContent="Unhealthy - Limit outdoor activity";}
+else{badge.style.background="#e57373";badge.style.color="#b71c1c";desc.textContent="Very Unhealthy - Stay indoors";}
+}
+
+function updateHistory(){
+const list=document.getElementById("historyList");
+list.innerHTML=historyData.map(h=>`<li>${h.city} → Temp: ${h.temp}°C, Hum: ${h.hum}%, Wind: ${h.wind}m/s, AQI: ${h.aqi}</li>`).join("");
+const avgTemp=(historyData.reduce((a,b)=>a+b.temp,0)/historyData.length).toFixed(1);
+const avgHum=(historyData.reduce((a,b)=>a+b.hum,0)/historyData.length).toFixed(1);
+document.getElementById("averageStats").textContent=`Avg Temp: ${avgTemp}°C | Avg Humidity: ${avgHum}%`;
+}
+
+function toggleTheme(){document.body.classList.toggle("dark");}
+
+function downloadCSV(){
+if(historyData.length===0){alert("No data to export!");return;}
+let csv="City,Temperature,Humidity,Wind,AQI\n";
+historyData.forEach(h=>{csv+=`${h.city},${h.temp},${h.hum},${h.wind},${h.aqi}\n`;});
+const blob=new Blob([csv],{type:'text/csv'});
+const link=document.createElement("a");
+link.href=URL.createObjectURL(blob);
+link.download="environment_dashboard.csv";
+link.click();
+}
+
+function resetDashboard(){
+historyData=[];
+updateHistory();
+if(tempChart) tempChart.destroy();
+if(humChart) humChart.destroy();
+if(trendChart) trendChart.destroy();
+document.getElementById("temp").textContent="-- °C";
+document.getElementById("humidity").textContent="-- %";
+document.getElementById("wind").textContent="-- m/s";
+document.getElementById("aqiBadge").textContent="--";
+document.getElementById("aqiDesc").textContent="--";
+}
+
+function downloadCharts(){
+[tempChart, humChart, trendChart].forEach(chart=>{
+if(chart){
+const link=document.createElement("a");
+link.href=chart.toBase64Image();
+link.download=chart.canvas.id+".png";
+link.click();
+}
+});
+}
+</script>
+</body>
+</html>
